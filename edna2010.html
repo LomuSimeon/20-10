@@ -63,23 +63,12 @@
   #letterModal{position:fixed;inset:0;display:grid;place-items:center;padding:18px;z-index:50;
     background:rgba(20,3,32,.6);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .6s ease}
   #letterModal.show{opacity:1;pointer-events:auto}
-  .letter{width:min(92vw,400px);background:var(--cream);color:#4a3540;
+  .letter{width:min(92vw,400px);background:var(--cream);color:#4a3540;opacity:0;
     border-radius:14px;padding:26px 24px 30px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.6);
     transform:translateY(28px) scale(.96);transition:transform .6s cubic-bezier(.22,1.2,.36,1)}
   #letterModal.show .letter{transform:none}
-  /* thiệp lắp ráp: từng mảnh nội dung bay từ rải rác về vị trí */
-  .letter > *{opacity:0;transform:translate(var(--dx,0),var(--dy,0)) rotate(var(--dr,0deg)) scale(.55);
-    transition:opacity .55s ease,transform .7s cubic-bezier(.22,1.1,.36,1)}
-  #letterModal.show .letter > *{opacity:1;transform:none}
-  #letterModal.show .letter > *:nth-child(1){transition-delay:.15s}
-  #letterModal.show .letter > *:nth-child(2){transition-delay:.3s}
-  #letterModal.show .letter > *:nth-child(3){transition-delay:.45s}
-  #letterModal.show .letter > *:nth-child(4){transition-delay:.6s}
-  #letterModal.show .letter > *:nth-child(5){transition-delay:.75s}
-  /* mảnh tim bay vào lắp ráp thành thiệp */
-  #shards{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-  .shard{position:absolute;left:50%;top:50%;width:24px;height:24px;border-radius:5px;opacity:.95;
-    background:linear-gradient(135deg,#ff5f8f,#c0308c);box-shadow:0 0 16px rgba(255,120,180,.95)}
+  /* thiệp lắp ráp từ hàng nghìn mảnh vỡ — canvas bay vào trong ~4s */
+  #assemble{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
   .polaroid{width:60%;margin:0 auto 16px;background:#fff;padding:9px 9px 28px;border-radius:4px;
     box-shadow:0 10px 26px rgba(90,50,70,.25);transform:rotate(-2.5deg)}
   .polaroid .photo{aspect-ratio:3/4;border-radius:2px;display:grid;place-items:center;font-size:44px;
@@ -88,8 +77,8 @@
   .letter h2{font-family:var(--script);font-size:26px;color:#c2497f;margin-bottom:10px}
   .letter p{font-size:15.5px;line-height:1.8;font-style:italic;color:#6b4f5e;white-space:pre-line}
   .sign{margin-top:20px;font-family:var(--script);font-size:26px;color:#c2497f}
-  .close-btn{margin-top:20px;padding:11px 26px;border-radius:999px;background:#c2497f;color:#fff;font-size:14px;
-    box-shadow:0 8px 20px rgba(194,73,127,.4)}
+  .close-btn{margin:20px auto 0;width:46px;height:46px;padding:0;border-radius:50%;background:#c2497f;color:#fff;
+    font-size:18px;display:grid;place-items:center;box-shadow:0 8px 20px rgba(194,73,127,.4)}
   @keyframes breathe{0%,100%{opacity:.75}50%{opacity:1}}
 </style>
 </head>
@@ -134,13 +123,13 @@
 </div>
 
 <div id="letterModal" role="dialog" aria-modal="true" aria-label="Thư tay">
-  <div id="shards" aria-hidden="true"></div>
+  <canvas id="assemble" aria-hidden="true"></canvas>
   <div class="letter">
     <div class="polaroid" id="polaroid"><div class="photo">💗</div></div>
     <h2 id="letterTo"></h2>
     <p id="letterBody"></p>
     <div class="sign" id="letterSign"></div>
-    <button class="close-btn" id="closeLetter">Xong! Đóng lại</button>
+    <button class="close-btn" id="closeLetter" aria-label="Đóng thư">✕</button>
   </div>
 </div>
 
@@ -975,33 +964,61 @@ function openLetter() {
   $("#letterBody").textContent = CONFIG.letter;
   $("#letterSign").textContent = `Thương, ${CONFIG.from} 🌹`;
   if (CONFIG.photos[0]) $("#polaroid").innerHTML = `<div class="photo"><img src="${CONFIG.photos[0]}" alt=""></div>`;
-  // gán bay ngẫu nhiên cho từng mảnh — lắp ráp khi hiện thiệp
-  document.querySelectorAll(".letter > *").forEach(el => {
-    el.style.setProperty("--dx", rand(-170, 170) + "px");
-    el.style.setProperty("--dy", rand(-130, 130) + "px");
-    el.style.setProperty("--dr", rand(-45, 45) + "deg");
-  });
-  spawnShards();
+  $(".letter").style.opacity = 0;
+  startAssembly();          // ~nghìn mảnh vỡ bay vào lắp ráp thành thiệp (~4s)
   $("#letterModal").classList.add("show");
   chime(660, .6);
 }
-/* mảnh tim bay từ xung quanh vào giữa — lắp ráp thành thiệp */
-function spawnShards() {
-  const box = $("#shards");
-  box.innerHTML = "";
-  for (let i = 0; i < 12; i++) {
-    const d = document.createElement("div");
-    d.className = "shard";
-    const a = rand(0, 6.28), dist = rand(150, 340);
-    d.style.marginLeft = rand(-12, 12) + "px";
-    d.style.marginTop = rand(-12, 12) + "px";
-    d.style.transform = `translate(${Math.cos(a) * dist}px,${Math.sin(a) * dist}px) rotate(${rand(0, 360)}deg)`;
-    d.style.transition = `transform .75s cubic-bezier(.3,1,.4,1) ${rand(0, .3)}s, opacity .5s ease ${rand(.3, .6)}s`;
-    box.appendChild(d);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      d.style.transform = "translate(0,0) rotate(0deg)";
-      d.style.opacity = 0;
-    }));
+/* ====== Thiệp lắp ráp từ hàng nghìn mảnh vỡ của trái tim nổ tung (4s) ====== */
+let asm = null;
+function startAssembly() {
+  const letterEl = $(".letter");
+  const rect = letterEl.getBoundingClientRect();
+  const cx = innerWidth / 2, cy = innerHeight / 2;   // thiệp luôn nằm giữa màn hình
+  const hw = rect.width / 2, hh = rect.height / 2;
+  const cv = $("#assemble");
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const N = mobile ? 800 : 1600;
+  const parts = [];
+  for (let i = 0; i < N; i++) {
+    const a = rand(0, 6.28), d = rand(260, 1200);
+    const r = Math.random();
+    parts.push({
+      x0: cx + Math.cos(a) * d, y0: cy + Math.sin(a) * d,
+      tx: cx + rand(-hw + 8, hw - 8), ty: cy + rand(-hh + 8, hh - 8),
+      s: rand(1.5, 5), dl: rand(0, 2.1), du: rand(.9, 1.6),
+      rot: rand(0, 6.28), vr: rand(-5, 5),
+      col: r < .65 ? "#fdf6f2" : (r < .88 ? "#ffd9ec" : "#e56b9a")   // màu theo tông thiệp
+    });
+  }
+  asm = { t: 0, parts, g, cv, letterEl, w: innerWidth, h: innerHeight };
+}
+function updateAssembly(dt) {
+  if (!asm) return;
+  asm.t += dt;
+  const g = asm.g;
+  g.clearRect(0, 0, asm.w, asm.h);
+  for (const p of asm.parts) {
+    const k = Math.min(1, Math.max(0, (asm.t - p.dl) / p.du));
+    if (k >= 1) continue;                  // mảnh đã ráp xong — trượt vào thiệp rồi biến mất
+    const e = 1 - Math.pow(1 - k, 3);
+    g.globalAlpha = k > .75 ? (1 - k) * 4 : 1;
+    g.fillStyle = p.col;
+    g.save();
+    g.translate(p.x0 + (p.tx - p.x0) * e, p.y0 + (p.ty - p.y0) * e);
+    g.rotate(p.rot + p.vr * asm.t);
+    g.fillRect(-p.s / 2, -p.s / 2, p.s, p.s);
+    g.restore();
+  }
+  g.globalAlpha = 1;
+  asm.letterEl.style.opacity = clamp01((asm.t - 2.2) / 1.4);   // thiệp hiện dần khi mảnh gần ráp xong
+  if (asm.t > 4) {
+    g.clearRect(0, 0, asm.w, asm.h);
+    asm.letterEl.style.opacity = 1;
+    asm = null;
   }
 }
 function flashToLetter() {
@@ -1013,6 +1030,8 @@ function flashToLetter() {
 }
 $("#closeLetter").addEventListener("click", () => {
   $("#letterModal").classList.remove("show");
+  if (asm) { asm.g.clearRect(0, 0, asm.w, asm.h); asm = null; }
+  $(".letter").style.opacity = 0;
   // về trạng thái nhịp tim cấp 0 — tim thu nhỏ lại, sẵn sàng nhấn lại từ đầu
   beats = 0;
   effect = { type: 0, t: 9 };
@@ -1074,6 +1093,7 @@ function animate() {
   orbitLightA.position.set(Math.cos(t * .7) * 2.4, .8 + Math.sin(t * .9) * .6, Math.sin(t * .7) * 2.4);
   orbitLightB.position.set(Math.cos(t * .5 + 3) * 3, -.4, Math.sin(t * .5 + 3) * 3);
   glowLight.intensity = 9 + Math.sin(t * 2) * 2 + (beatT < 1 ? 16 * Math.sin(Math.min(beatT, 1) * Math.PI) : 0);
+  updateAssembly(dt);
 
   // node 3 — bay vút: nền sáng → tối
   if (state === "flying") {

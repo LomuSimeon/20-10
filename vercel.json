@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/", "destination": "/edna2010.html" }]
+}

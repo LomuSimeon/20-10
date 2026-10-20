@@ -19,7 +19,6 @@
     justify-content:space-between;padding:max(18px,env(safe-area-inset-top)) 18px max(22px,env(safe-area-inset-bottom));z-index:10}
   .hud-top{text-align:center;transition:opacity 1s ease}
   .hud-top.hide{opacity:0}
-  .occasion{font-size:10px;letter-spacing:.5em;opacity:.7;font-family:Arial,sans-serif}
   .title{font-family:var(--script);font-size:clamp(26px,7vw,38px);color:#ffd9ec;
     text-shadow:0 0 24px rgba(255,120,190,.85);margin-top:2px}
   .intro-btn{margin-top:clamp(20px,6vh,46px);padding:13px 30px;border-radius:999px;color:#fff;pointer-events:auto;
@@ -53,11 +52,6 @@
   .qr-cap{text-align:center;margin-top:12px;font-size:14px;color:#7a4a5e}
   .qr-hint{position:absolute;bottom:14%;left:0;right:0;text-align:center;font-size:13px;color:#ffd9ec;
     text-shadow:0 0 12px rgba(255,120,180,.8);animation:breathe 2.2s ease-in-out infinite}
-
-  /* node 4 — hint trong vũ trụ lời chúc */
-  .wish-hint{position:fixed;left:0;right:0;bottom:19%;text-align:center;font-size:14px;color:#f4c9e2;
-    text-shadow:0 0 12px rgba(255,120,180,.6);opacity:0;transition:opacity .8s ease;pointer-events:none;z-index:12}
-  .wish-hint.show{opacity:1}
 
   /* node 7 — header panel */
   .panel-head{position:fixed;left:0;right:0;top:23%;text-align:center;pointer-events:none;z-index:11;
@@ -109,14 +103,13 @@
 
 <div class="hud">
   <div class="hud-top">
-    <div class="occasion">HỘI PHỤ NỮ VIỆT NAM · 20/10</div>
     <div class="title">Ngày Phụ nữ Việt Nam 🌹</div>
     <button class="intro-btn" id="introBtn">Chạm để mở quà 🌹</button>
   </div>
   <div class="hud-bottom" id="hudBottom">
     <div class="beat-bar"><i id="beatFill"></i></div>
-    <div class="beat-count" id="beatCount">0/3 nhịp tim</div>
-    <div class="hint" id="hint">Chạm vào trái tim để nhận thư 20/10</div>
+    <div class="beat-count" id="beatCount">0/5 nhịp tim</div>
+    <div class="hint" id="hint">Chạm vào trái tim 5 lần để nhận thư ❤️</div>
     <div class="sub" id="sub"></div>
     <div class="btns">
       <button class="btn" id="btnBeat">💗 Nhịp tim</button>
@@ -126,12 +119,9 @@
   </div>
 </div>
 
-<!-- node 4 — hint gọi tim -->
-<div class="wish-hint" id="wishHint">Chạm để gọi trái tim về ❤️</div>
 
 <!-- node 7 — header panel -->
 <div class="panel-head" id="panelHead">
-  <div class="occasion">HỘI PHỤ NỮ VIỆT NAM · 20 THÁNG 10</div>
   <div class="panel-title" id="panelTitle"></div>
 </div>
 
@@ -186,7 +176,7 @@ const CONFIG = {
   ],
   letter: "20/10 hạnh phúc em nhé 🌹\nChúc Bé Hoa luôn rực rỡ, xinh đẹp và cười thật nhiều.\nYêu em nhiều!"
 };
-const BEATS = 3;
+const BEATS = 5;
 
 try {
   await import("three");
@@ -457,6 +447,31 @@ const ring = new THREE.Mesh(
 heartGroup.add(ring);
 let ringT = 1e9;
 
+// hiệu ứng tỏa hạt (nhịp 2)
+const SPARKS = 140;
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(SPARKS * 3), 3));
+const sparkMat = new THREE.PointsMaterial({ size: .08, map: glowTex, color: "#ffd9ec", transparent: true,
+  opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+const sparks = new THREE.Points(sparkGeo, sparkMat);
+sparks.visible = false;
+heartGroup.add(sparks);
+const sparkVel = new Float32Array(SPARKS * 3);
+function fireSparks() {
+  const p = sparkGeo.getAttribute("position").array;
+  for (let i = 0; i < SPARKS * 3; i += 3) {
+    const j = Math.floor(Math.random() * base.length / 3) * 3;
+    p[i] = base[j]; p[i+1] = base[j+1]; p[i+2] = base[j+2];
+    const len = Math.hypot(base[j], base[j+1], base[j+2]) || 1;
+    const s = rand(2, 5);
+    sparkVel[i] = base[j] / len * s;
+    sparkVel[i+1] = base[j+1] / len * s;
+    sparkVel[i+2] = base[j+2] / len * s;
+  }
+  sparkGeo.getAttribute("position").needsUpdate = true;
+  sparks.visible = true; sparkMat.opacity = 1;
+}
+
 /* ====== Dải ngân hà + sao nền ====== */
 function galaxyPoints(count, arms, rMin, rMax, cIn, cOut) {
   const pos = new Float32Array(count * 3), colr = new Float32Array(count * 3);
@@ -639,55 +654,38 @@ function updatePolaroidBurst(dt) {
     b.sp.material.opacity = .9 * Math.min(1, b.age / .25) * Math.min(1, (b.life - b.age) / .7);
   });
 }
-// ảnh trôi + tim đỏ trôi (node 4 — vũ trụ lời chúc)
-const driftPhotos = [], floatHearts = [];
-let photoFade = 1;
-function redHeartTexture() {
-  const c = document.createElement("canvas");
-  c.width = c.height = 128;
-  const g = c.getContext("2d");
-  g.shadowColor = "rgba(255,60,110,.9)"; g.shadowBlur = 16;
-  g.fillStyle = "#ff2d5f";
-  g.beginPath();
-  g.moveTo(64, 106);
-  g.bezierCurveTo(18, 76, 8, 42, 30, 25);
-  g.bezierCurveTo(49, 11, 64, 27, 64, 39);
-  g.bezierCurveTo(64, 27, 79, 11, 98, 25);
-  g.bezierCurveTo(120, 42, 110, 76, 64, 106);
-  g.fill();
-  return new THREE.CanvasTexture(c);
+/* ====== Node warp: hàng trăm lời chúc + ảnh lướt qua như phi thuyền (dừng sau 4s) ====== */
+const warpGroup = new THREE.Group();
+camera.add(warpGroup);
+const warpItems = [], warpMats = [];
+function resetWarpItem(it, z) {
+  z = z ?? rand(-60, -4);
+  const spread = -z;
+  const hh = spread * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * .9;
+  it.sp.position.set(rand(-1, 1) * hh * camera.aspect, rand(-1, 1) * hh, z);
 }
-const redHeartTex = redHeartTexture();
-function spawnWishScenery() {
-  const n = mobile ? 3 : 4;
-  for (let i = 0; i < n; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: polaroidTex(i + 1), transparent: true, opacity: .95, depthWrite: false }));
-    sp.scale.set(.95, 1.13, 1);
-    sp.position.set(rand(-2.2, 2.2), rand(-2, 2), rand(-4.5, .5));
-    scene.add(sp);
-    driftPhotos.push({ sp, ph: rand(0, 6) });
+function spawnWarp() {
+  if (warpItems.length) {
+    warpItems.forEach(it => { it.sp.visible = true; it.sp.material.opacity = it.baseOp; resetWarpItem(it); });
+    return;
   }
-  for (let i = 0; i < 5; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: redHeartTex, transparent: true, opacity: .9, depthWrite: false }));
-    const base = rand(.4, .7);
-    sp.scale.setScalar(base);
-    sp.position.set(rand(-2.6, 2.6), rand(-2.5, 2.5), rand(-4, 1));
-    scene.add(sp);
-    floatHearts.push({ sp, base, rise: rand(.18, .35), ph: rand(0, 6) });
+  const textMats = CONFIG.wishes.map(txt => new THREE.SpriteMaterial(
+    { map: textTexture(txt), transparent: true, opacity: .95, depthWrite: false }));
+  const photoMats = [];
+  for (let i = 0; i < 8; i++)
+    photoMats.push(new THREE.SpriteMaterial({ map: polaroidTex(i), transparent: true, opacity: .95, depthWrite: false }));
+  warpMats.push(...textMats, ...photoMats);
+  const texts = mobile ? 45 : 65, photos = mobile ? 16 : 24;   // ~hàng trăm vật thể bay
+  for (let i = 0; i < texts + photos; i++) {
+    const isText = i < texts;
+    const mat = isText ? textMats[i % textMats.length] : photoMats[(i - texts) % photoMats.length];
+    const sp = new THREE.Sprite(mat);
+    if (isText) sp.scale.set(2.3, .54, 1); else sp.scale.set(1.05, 1.24, 1);
+    warpGroup.add(sp);
+    const it = { sp, baseOp: .95, speed: rand(24, 52) };
+    resetWarpItem(it);
+    warpItems.push(it);
   }
-}
-function updateWishScenery(dt, t) {
-  driftPhotos.forEach(d => {
-    d.sp.position.y += Math.sin(t * .6 + d.ph) * .004;
-    d.sp.material.rotation = Math.sin(t * .5 + d.ph) * .12;
-    d.sp.material.opacity = .75 * photoFade;
-  });
-  floatHearts.forEach(h => {
-    h.sp.position.y += h.rise * dt;
-    if (h.sp.position.y > 4) h.sp.position.y = -3.5;
-    h.sp.scale.setScalar(h.base * (1 + .12 * Math.sin(t * 2 + h.ph)));
-    h.sp.material.opacity = .9 * photoFade;
-  });
 }
 
 /* ====== Bong bóng ảnh quỹ đạo + vòng quỹ đạo (node 7) ====== */
@@ -755,7 +753,7 @@ function spawnBubbles() {
 
 /* ====== Lời chúc bay (font tiếng Việt đúng) ====== */
 try { await document.fonts.load('600 90px "Playfair Display"'); } catch (e) {}
-function textSprite(text) {
+function textTexture(text) {
   const c = document.createElement("canvas");
   c.width = 1024; c.height = 240;
   const g = c.getContext("2d");
@@ -765,28 +763,8 @@ function textSprite(text) {
   g.shadowColor = "rgba(255,110,180,.95)"; g.shadowBlur = 36;
   g.fillStyle = "#ffd9ec";
   g.fillText(text, 512, 124);
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-  sp.scale.set(1.9, .44, 1);
-  return sp;
+  return new THREE.CanvasTexture(c);
 }
-// rải theo độ sâu khung hình dọc — bán kính thấy được chỉ ~±2.5 nên không rải tròn
-// giãn cách để chữ không chồng lên nhau
-const wishPos = [];
-CONFIG.wishes.forEach(() => {
-  let x, y, z, tries = 0;
-  do {
-    x = rand(-2.2, 2.2); y = rand(-1.4, 2.2); z = rand(-4.5, .8);
-    tries++;
-  } while (tries < 20 && wishPos.some(p => Math.hypot(p[0]-x, p[1]-y, (p[2]-z)*.4) < 1.15));
-  wishPos.push([x, y, z]);
-});
-const wishSprites = CONFIG.wishes.map((text, i) => {
-  const sp = textSprite(text);
-  sp.position.set(...wishPos[i]);
-  sp.material.opacity = 0;
-  scene.add(sp);
-  return { sp, ph: rand(0, 6) };
-});
 
 /* ====== Khoảng cách khung hình ====== */
 function fitDistance(halfH, halfW) {
@@ -804,10 +782,9 @@ controls.enablePan = false;
 controls.target.set(0, .15, 0);
 controls.enabled = false;
 
-/* ====== Trạng thái: qr → intro → flying → morph → wishes → heartform → main ====== */
+/* ====== Trạng thái: qr → intro → flying → morph (xoáy ốc + hội tụ tim) → warp (4s) → main ====== */
 let state = "qr";
-let flyT = 0, morphT = 0, heartT = 0, wishHintT = -1;
-let wishFade = 0;
+let flyT = 0, morphT = 0, warpT = 0;
 const flyFrom = { r: 0, theta: -1.1, phi: .14 };
 const flyTo = { r: 0, theta: 0, phi: .10 };
 
@@ -841,15 +818,15 @@ function startFlight() {
   chime(880, .5);
 }
 
-/* node 3 → node 4: tách cánh theo tia sáng, ảnh bay tung, chữ hiện lên */
+/* node 3: cánh hoa xoáy ốc bay lên + hội tụ thành tim (tự động) */
 function startMorph() {
   state = "morph"; morphT = 0;
   flower.children.forEach(pv => {
     if (!pv.isGroup) return;
-    const th = pv.rotation.y;
     pv.userData.fly = {
-      dir: new THREE.Vector3(Math.sin(th), 0, Math.cos(th)),
-      spd: rand(.5, 1.4), up: rand(2.4, 4.6), rx: rand(-1.8, 1.8), ry: rand(-2.4, 2.4)
+      a: rand(0, 6.28), r0: rand(.3, .8), rmax: rand(1.6, 3),
+      w: rand(2.2, 4.2) * (Math.random() < .5 ? -1 : 1),
+      up: rand(1.6, 3.4), rx: rand(-1.8, 1.8), ry: rand(-2.4, 2.4)
     };
   });
   petalMat.transparent = true; greenMat.transparent = true;
@@ -857,41 +834,31 @@ function startMorph() {
   petalMat.emissiveIntensity = 1.4;
   beam.visible = true;
   spawnPolaroidBurst();
+  heartGroup.visible = true;
   for (let i = 0; i < 4; i++) setTimeout(fireShooter, i * 300);
   chime(660, .8, .1);
 }
 
-/* node 4: vũ trụ lời chúc — ngắm rồi chạm để gọi tim */
-function startWishes() {
-  state = "wishes";
+/* node warp: phi thuyền lời chúc — bay 4s rồi dừng → panel */
+function startWarp() {
+  state = "warp"; warpT = 0;
   roseGroup.visible = false;
   beam.visible = false; beamMat.opacity = 0;
   burstFlare.material.opacity = 0;
   burstPhotos.forEach(b => { b.sp.visible = false; });
   burstPhotos.length = 0;
   bloom.strength = .85;
-  wishFade = 1;
-  photoFade = 1;
-  spawnWishScenery();
-  wishHintT = 0;
-}
-
-/* node 5: hạt trong vũ trụ ghép thành tim */
-function startHeartform() {
-  if (state !== "wishes") return;
-  state = "heartform"; heartT = 0;
   heartGroup.visible = true;
-  $("#wishHint").classList.remove("show");
-  chime(660, .7, .12);
+  heartMat.opacity = Math.max(heartMat.opacity, .7);
+  spawnWarp();
+  chime(880, .6, .12);
+  for (let i = 0; i < 4; i++) setTimeout(fireShooter, i * 260);
 }
 
-/* node 7: panel — header, bong bóng quỹ đạo, 0/3 nhịp tim */
+/* node panel: header, bong bóng quỹ đạo, 0/5 nhịp tim */
 function enterPanel() {
   state = "main";
   heartMat.opacity = .95;
-  photoFade = 0;
-  driftPhotos.forEach(d => d.sp.visible = false);
-  floatHearts.forEach(h => h.sp.visible = false);
   bloom.strength = .85;
   $("#hudBottom").classList.add("show");
   $(".hud-top").classList.add("hide");
@@ -908,15 +875,20 @@ function enterPanel() {
 }
 
 /* ====== Nhịp tim / xoắn / thư ====== */
-const hints = ["Chạm vào trái tim để nhận thư 20/10", "1/3 nhịp tim", "2/3 nhịp tim", "3/3 nhịp tim ❤️ mở thư..."];
-const subs = ["", "Thêm hai nhịp nữa thôi", "Một nhịp nữa cơ ❤️", ""];
+const hints = ["Chạm vào trái tim 5 lần để nhận thư ❤️",
+  "1/5 nhịp tim", "2/5 nhịp tim", "3/5 nhịp tim", "4/5 nhịp tim", "5/5 nhịp tim ❤️ mở thư..."];
+const subs = ["", "Còn 4 nhịp", "Còn 3 nhịp", "Còn 2 nhịp", "Chỉ còn 1 nhịp ❤️", ""];
 let beats = 0, beatT = 1e9, phase = "formed", phaseT = 0, twistSpin = 0;
+let effect = { type: 0, t: 9 };   // hiệu ứng theo cấp nhấn (1..5)
 
 function beat() {
   if (state !== "main" || beats >= BEATS) return;
   beats++;
-  chime(520 + beats * 140, .3);
-  beatT = 0; ringT = 0;
+  chime(520 + beats * 110, .3);
+  beatT = 0;
+  if (beats === 1) ringT = 0;                 // nhịp 1: sóng xung kích
+  effect = { type: beats, t: 0 };
+  if (beats === 2) fireSparks();              // nhịp 2: tỏa hạt sáng
   $("#beatFill").style.width = (beats / BEATS * 100) + "%";
   $("#beatCount").textContent = beats + "/" + BEATS + " nhịp tim";
   $("#hint").textContent = hints[beats];
@@ -952,7 +924,6 @@ renderer.domElement.addEventListener("pointerup", e => {
     if (!lastTap) return;
     lastTap = 0;
     if (state === "intro") startFlight();
-    else if (state === "wishes") startHeartform();
     else beat();
   }, 340);
 });
@@ -1004,7 +975,20 @@ function flashToLetter() {
   setTimeout(openLetter, 280);
   setTimeout(() => { f.style.transition = "opacity .9s ease"; f.style.opacity = 0; }, 520);
 }
-$("#closeLetter").addEventListener("click", () => { $("#letterModal").classList.remove("show"); chime(440, .3); });
+$("#closeLetter").addEventListener("click", () => {
+  $("#letterModal").classList.remove("show");
+  // về trạng thái nhịp tim cấp 0 — tim thu nhỏ lại, sẵn sàng nhấn lại từ đầu
+  beats = 0;
+  effect = { type: 0, t: 9 };
+  ringT = 1e9;
+  sparks.visible = false;
+  heartMat.color.setScalar(1);
+  $("#beatFill").style.width = "0%";
+  $("#beatCount").textContent = "0/" + BEATS + " nhịp tim";
+  $("#hint").textContent = hints[0];
+  $("#sub").textContent = "";
+  chime(440, .3);
+});
 
 /* ====== Thiệp QR (node 0) ====== */
 (function drawHeartQR() {
@@ -1039,7 +1023,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), .05);
   const t = clock.elapsedTime;
 
-  const speedBoost = (state === "flying" || state === "morph") ? 6 : 1;
+  const speedBoost = (state === "flying" || state === "morph" || state === "warp") ? 6 : 1;
   galaxy.rotation.y += dt * .016 * speedBoost;
   stars.rotation.y -= dt * .006 * speedBoost;
 
@@ -1068,14 +1052,16 @@ function animate() {
     if (flyT >= 1) { bloom.strength = .5; startMorph(); }
   }
 
-  // node 4a — tách cánh bay lên tia sáng, ảnh polaroid bay tung, chữ hiện lên
+  // node 3 — cánh hoa xoáy ốc bay lên rồi hội tụ về tâm + hạt tự ghép thành tim
   if (state === "morph") {
     morphT += dt;
     flower.children.forEach(pv => {
       const f = pv.userData.fly;
       if (!f) return;
-      pv.position.addScaledVector(f.dir, f.spd * dt);
-      pv.position.y += f.up * dt;
+      const k = Math.min(morphT / 2.6, 1);
+      const r = f.r0 + (f.rmax - f.r0) * Math.sin(k * Math.PI);   // nở ra rồi chụm về
+      f.a += f.w * dt;
+      pv.position.set(Math.cos(f.a) * r, pv.position.y + f.up * dt, Math.sin(f.a) * r);
       pv.rotation.x += f.rx * dt;
       pv.rotation.y += f.ry * dt;
     });
@@ -1090,38 +1076,60 @@ function animate() {
     burstFlare.material.opacity = fk * .55;
     burstFlare.scale.setScalar(.5 + morphT * 3);
     updatePolaroidBurst(dt);
-    wishFade = clamp01((morphT - .6) / 1.6);
-    if (morphT > 3.2) startWishes();
+    writeHeart(clamp01((morphT - .8) / 1.8), morphT * 1.4);       // hội tụ thành tim — tự động
+    heartMat.opacity = Math.min(.95, clamp01((morphT - .8) / 1.1));
+    if (morphT > 3.4) startWarp();
   }
 
-  // node 4b — vũ trụ lời chúc: ảnh + tim đỏ trôi, hiện hint
-  if (state === "wishes") {
-    updateWishScenery(dt, t);
-    wishHintT += dt;
-    if (wishHintT > 1.4) $("#wishHint").classList.add("show");
-  }
-
-  // node 5 — ghép tim
-  if (state === "heartform") {
-    heartT += dt;
-    writeHeart(clamp01(heartT / 2.6), heartT * 1.4);
-    heartMat.opacity = Math.min(.95, clamp01(heartT / 1.2));
-    photoFade = Math.max(0, 1 - heartT / 1.5);
-    updateWishScenery(dt, t);
-    if (heartT >= 2.6) enterPanel();
-  }
-
-  // node 7 — panel
-  if (state === "main") {
-    wishFade = Math.max(0, wishFade - dt * .8);   // dọn chữ khỏi tim
-    heart.rotation.y += dt * .06;
-    if (beatT < 1) {
-      beatT += dt * 2;
-      const k = Math.sin(Math.min(beatT, 1) * Math.PI);
-      heartGroup.scale.setScalar(1 + .2 * k);
+  // node warp — phi thuyền lời chúc: bay 4s rồi dừng → panel
+  if (state === "warp") {
+    warpT += dt;
+    heart.rotation.y += dt * .1;
+    const cyc = t % 1.4;   // nhịp tim lub-dub
+    const hb = Math.exp(-Math.pow((cyc - .12) / .07, 2)) + .6 * Math.exp(-Math.pow((cyc - .38) / .09, 2));
+    heartGroup.scale.setScalar(1 + .05 * hb);
+    const curve = warpT < 3.2 ? 1 : Math.max(0, 1 - (warpT - 3.2) / .8);
+    if (curve > 0) warpItems.forEach(it => {
+      it.sp.position.z += it.speed * dt * curve;
+      if (it.sp.position.z > -.8) resetWarpItem(it, rand(-60, -45));
+    });
+    if (warpT >= 4) {
+      const fde = Math.min(1, (warpT - 4) / .7);
+      warpMats.forEach(m => { m.opacity = .95 * (1 - fde); });
+      if (fde >= 1) {
+        warpItems.forEach(it => it.sp.visible = false);
+        enterPanel();
+      }
     }
+  }
+
+  // node panel — nhịp tim liên tục, to dần theo cấp, hiệu ứng riêng từng nhịp
+  if (state === "main") {
+    effect.t += dt;
+    heart.rotation.y += dt * .06;
+    if (beatT < 1) beatT += dt * 2;
+    const cyc = t % 1.4;   // lub-dub: hai nhát tim
+    const hb = Math.exp(-Math.pow((cyc - .12) / .07, 2)) + .6 * Math.exp(-Math.pow((cyc - .38) / .09, 2));
+    let s = (1 + .12 * beats) * (1 + .05 * hb);           // to dần sau mỗi nhịp + đập idle
+    if (beatT < 1) s *= 1 + .16 * Math.sin(Math.min(beatT, 1) * Math.PI);
+    let sx = 1, sy = 1;
+    if (effect.type === 2 && effect.t < 1.2) {            // nhịp 2: hạt tỏa ra
+      const p = sparkGeo.getAttribute("position").array;
+      for (let i = 0; i < SPARKS * 3; i++) { p[i] += sparkVel[i] * dt; p[i+1] += sparkVel[i+1] * dt; p[i+2] += sparkVel[i+2] * dt; }
+      sparkGeo.getAttribute("position").needsUpdate = true;
+      sparkMat.opacity = Math.max(0, 1 - effect.t / 1.2);
+    } else if (effect.type === 2) sparks.visible = false;
+    if (effect.type === 3) {                              // nhịp 3: xoay 360° + sáng bừng
+      if (effect.t < .9) heart.rotation.y += dt * 7 * (1 - effect.t / .9);
+      heartMat.color.setScalar(1 + 1.1 * Math.max(0, 1 - effect.t / .7));
+    } else heartMat.color.setScalar(1);
+    if (effect.type === 4 && effect.t < 1) {              // nhịp 4: nảy gel (co giãn)
+      const w = Math.exp(-3.5 * effect.t) * Math.cos(effect.t * 15);
+      sx = 1 + .2 * w; sy = 1 - .18 * w;
+    }
+    heartGroup.scale.set(s * sx, s * sy, s * sx);         // nhịp 5: chớp sáng → thư (flashToLetter)
     updateTwist(dt);
-    if (ringT < 1.1) {
+    if (ringT < 1.1) {                                    // nhịp 1: sóng xung kích
       ringT += dt;
       ring.scale.setScalar(1 + (ringT / 1.1) * 4.2);
       ring.material.opacity = .7 * (1 - ringT / 1.1);
@@ -1131,12 +1139,6 @@ function animate() {
       b.sp.position.set(Math.cos(a) * b.r, .35 + Math.sin(a * 1.3 + b.ph) * .5, Math.sin(a) * b.r * .6);
     });
   }
-
-  // lời chúc bay
-  wishSprites.forEach(w => {
-    w.sp.position.y += Math.sin(t * .8 + w.ph) * .004;
-    w.sp.material.opacity = wishFade * (.8 + .2 * Math.sin(t * 1.2 + w.ph));
-  });
 
   // sao băng — dày hơn lúc bay
   shooterTimer -= dt * speedBoost;

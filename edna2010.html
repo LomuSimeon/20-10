@@ -84,7 +84,7 @@
     box-shadow:0 10px 26px rgba(90,50,70,.25);transform:rotate(-2.5deg)}
   .polaroid .photo{aspect-ratio:3/4;border-radius:2px;display:grid;place-items:center;font-size:44px;
     background:linear-gradient(150deg,#e8b7d4,#b47ad0);color:#fff}
-  .polaroid img{width:100%;height:100%;object-fit:cover;display:block}
+  .polaroid img{width:100%;height:100%;object-fit:contain;display:block;background:#fdf6f2}
   .letter h2{font-family:var(--script);font-size:26px;color:#c2497f;margin-bottom:10px}
   .letter p{font-size:15.5px;line-height:1.8;font-style:italic;color:#6b4f5e;white-space:pre-line}
   .sign{margin-top:20px;font-family:var(--script);font-size:26px;color:#c2497f}
@@ -174,7 +174,16 @@ const CONFIG = {
     "Chúc em mãi xinh đẹp 🌹", "Yêu em nhiều ❤️", "20/10 hạnh phúc 🎀",
     "Luôn rực rỡ ✨", "Luôn mỉm cười 😊", "Em là hoa hồng của anh 🌹"
   ],
-  photos: [],
+  photos: [
+    "img/1792498355296_8248084726404571584_8248084726404571584_ef767e6ffa3b3646bd6a92a9ed4ee47a.jpg",
+    "img/1792498355336_8248084726404571584_8248084726404571584_23391e1161f1d4a7b3d1edc94ab2f4d3.jpg",
+    "img/1792498355358_8248084726404571584_8248084726404571584_cef68332d03cd77caf7069e4ceae93cf.jpg",
+    "img/1792498355376_8248084726404571584_8248084726404571584_9c0d96ce4136c2dd5f9786800911ff96.jpg",
+    "img/1792498355393_8248084726404571584_8248084726404571584_abffe9bf73e4bdb5a62f9b2a01ee4e9f.jpg",
+    "img/1792498355409_8248084726404571584_8248084726404571584_86742e02ace0397eb478ad1798e02edd.jpg",
+    "img/1792498355422_8248084726404571584_8248084726404571584_1317f75ccd3d710306b20979ae9cd547.jpg",
+    "img/1792498355434_8248084726404571584_8248084726404571584_0005946b3effa1ac27534acba02c8720.jpg"
+  ],
   letter: "20/10 hạnh phúc em nhé 🌹\nChúc Bé Hoa luôn rực rỡ, xinh đẹp và cười thật nhiều.\nYêu em nhiều!"
 };
 const BEATS = 3;
@@ -593,7 +602,8 @@ CONFIG.photos.forEach(src => {
     const g = c.getContext("2d");
     g.fillStyle = "#fdf6f2"; g.fillRect(0, 0, 256, 300);
     g.save(); g.beginPath(); g.rect(14, 14, 228, 228); g.clip();
-    const s = Math.max(228 / im.width, 228 / im.height);
+    // contain — không crop: thu nhỏ toàn bộ ảnh, chừa viền nền nếu thiếu tỉ lệ
+    const s = Math.min(228 / im.width, 228 / im.height);
     g.drawImage(im, 14 + (228 - im.width * s) / 2, 14 + (228 - im.height * s) / 2, im.width * s, im.height * s);
     g.restore();
     g.strokeStyle = "rgba(150,110,140,.4)"; g.strokeRect(14.5, 14.5, 227, 227);
@@ -689,11 +699,15 @@ function bubbleTexture(label, photoCanvas, emoji) {
   const cx = 128, cy = 122, r = 92;
   g.save();
   g.beginPath(); g.arc(cx, cy, r, 0, 6.29); g.clip();
-  if (photoCanvas) g.drawImage(photoCanvas, cx - r, cy - r, r * 2, r * 2);
-  else {
-    const gr = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    gr.addColorStop(0, "#f0a2cc"); gr.addColorStop(1, "#a44fd0");
-    g.fillStyle = gr; g.fillRect(cx - r, cy - r, r * 2, r * 2);
+  // nền gradient trước, ảnh contain lên trên — không kéo giãn, không cắt mất hình
+  const gr = g.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+  gr.addColorStop(0, "#f0a2cc"); gr.addColorStop(1, "#a44fd0");
+  g.fillStyle = gr; g.fillRect(cx - r, cy - r, r * 2, r * 2);
+  if (photoCanvas) {
+    const s = Math.min(r * 2 / photoCanvas.width, r * 2 / photoCanvas.height);
+    const w = photoCanvas.width * s, h = photoCanvas.height * s;
+    g.drawImage(photoCanvas, cx - w / 2, cy - h / 2, w, h);
+  } else {
     g.font = "90px serif"; g.textAlign = "center"; g.textBaseline = "middle";
     g.fillText(emoji, cx, cy + 8);
   }

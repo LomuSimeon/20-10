@@ -25,19 +25,12 @@
     background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.45);backdrop-filter:blur(6px);
     font-size:15px;letter-spacing:.05em;animation:breathe 2.2s ease-in-out infinite;transition:opacity .6s}
   .intro-btn:active{transform:scale(.96)}
-  .hud-bottom{display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;pointer-events:none;transition:opacity 1.2s ease}
-  .hud-bottom.show{opacity:1;pointer-events:auto}
-  .beat-bar{width:min(64vw,300px);height:3px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden}
-  .beat-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff8ec4,#ffd2e8);
-    transition:width .5s ease;box-shadow:0 0 10px #ff8ec4}
-  .beat-count{font-size:12px;letter-spacing:.15em;color:#e8b7d4}
-  .hint{font-size:13px;color:#f4c9e2;min-height:1.4em;text-shadow:0 0 12px rgba(0,0,0,.8)}
-  .sub{font-size:11px;color:#c79ad4;opacity:.85}
-  .btns{display:flex;gap:12px}
-  .btn{padding:11px 22px;border-radius:999px;color:#fff;background:rgba(255,255,255,.12);
-    border:1px solid rgba(255,255,255,.4);backdrop-filter:blur(6px);font-size:14px;transition:transform .15s}
-  .btn:active{transform:scale(.94)}
-  .drag-tip{font-size:11px;color:#b78bc9;opacity:.8}
+  /* line dọc — cấp độ theo màu */
+  .level-line{position:fixed;right:16px;top:50%;transform:translateY(-50%);width:4px;height:36vh;border-radius:4px;
+    background:rgba(255,255,255,.14);overflow:hidden;opacity:0;transition:opacity 1s ease;pointer-events:none;z-index:12}
+  .level-line.show{opacity:1}
+  .level-line i{position:absolute;bottom:0;left:0;width:100%;height:0;border-radius:4px;background:var(--lvl,#5a3d7a);
+    transition:height .5s ease,background .5s ease;box-shadow:0 0 14px var(--lvl,#5a3d7a)}
 
   /* node 0 — thiệp QR */
   #qrScreen{position:fixed;inset:0;z-index:40;display:grid;place-items:center;
@@ -74,6 +67,19 @@
     border-radius:14px;padding:26px 24px 30px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.6);
     transform:translateY(28px) scale(.96);transition:transform .6s cubic-bezier(.22,1.2,.36,1)}
   #letterModal.show .letter{transform:none}
+  /* thiệp lắp ráp: từng mảnh nội dung bay từ rải rác về vị trí */
+  .letter > *{opacity:0;transform:translate(var(--dx,0),var(--dy,0)) rotate(var(--dr,0deg)) scale(.55);
+    transition:opacity .55s ease,transform .7s cubic-bezier(.22,1.1,.36,1)}
+  #letterModal.show .letter > *{opacity:1;transform:none}
+  #letterModal.show .letter > *:nth-child(1){transition-delay:.15s}
+  #letterModal.show .letter > *:nth-child(2){transition-delay:.3s}
+  #letterModal.show .letter > *:nth-child(3){transition-delay:.45s}
+  #letterModal.show .letter > *:nth-child(4){transition-delay:.6s}
+  #letterModal.show .letter > *:nth-child(5){transition-delay:.75s}
+  /* mảnh tim bay vào lắp ráp thành thiệp */
+  #shards{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .shard{position:absolute;left:50%;top:50%;width:24px;height:24px;border-radius:5px;opacity:.95;
+    background:linear-gradient(135deg,#ff5f8f,#c0308c);box-shadow:0 0 16px rgba(255,120,180,.95)}
   .polaroid{width:60%;margin:0 auto 16px;background:#fff;padding:9px 9px 28px;border-radius:4px;
     box-shadow:0 10px 26px rgba(90,50,70,.25);transform:rotate(-2.5deg)}
   .polaroid .photo{aspect-ratio:3/4;border-radius:2px;display:grid;place-items:center;font-size:44px;
@@ -106,18 +112,10 @@
     <div class="title">Ngày Phụ nữ Việt Nam 🌹</div>
     <button class="intro-btn" id="introBtn">Chạm để mở quà 🌹</button>
   </div>
-  <div class="hud-bottom" id="hudBottom">
-    <div class="beat-bar"><i id="beatFill"></i></div>
-    <div class="beat-count" id="beatCount">0/5 nhịp tim</div>
-    <div class="hint" id="hint">Chạm vào trái tim 5 lần để nhận thư ❤️</div>
-    <div class="sub" id="sub"></div>
-    <div class="btns">
-      <button class="btn" id="btnBeat">💗 Nhịp tim</button>
-      <button class="btn" id="btnTwist">🌀 Xoắn</button>
-    </div>
-    <div class="drag-tip">Kéo để bay quanh trái tim · lướt để xem 360°</div>
-  </div>
 </div>
+
+<!-- line dọc — cấp độ nhịp theo màu -->
+<div class="level-line" id="levelLine"><i id="levelFill"></i></div>
 
 
 <!-- node 7 — header panel -->
@@ -136,6 +134,7 @@
 </div>
 
 <div id="letterModal" role="dialog" aria-modal="true" aria-label="Thư tay">
+  <div id="shards" aria-hidden="true"></div>
   <div class="letter">
     <div class="polaroid" id="polaroid"><div class="photo">💗</div></div>
     <h2 id="letterTo"></h2>
@@ -860,7 +859,7 @@ function enterPanel() {
   state = "main";
   heartMat.opacity = .95;
   bloom.strength = .85;
-  $("#hudBottom").classList.add("show");
+  $("#levelLine").classList.add("show");
   $(".hud-top").classList.add("hide");
   $("#panelHead").classList.add("show");
   spawnBubbles();
@@ -875,25 +874,38 @@ function enterPanel() {
 }
 
 /* ====== Nhịp tim / xoắn / thư ====== */
-const hints = ["Chạm vào trái tim 5 lần để nhận thư ❤️",
-  "1/5 nhịp tim", "2/5 nhịp tim", "3/5 nhịp tim", "4/5 nhịp tim", "5/5 nhịp tim ❤️ mở thư..."];
-const subs = ["", "Còn 4 nhịp", "Còn 3 nhịp", "Còn 2 nhịp", "Chỉ còn 1 nhịp ❤️", ""];
+const lvlColors = ["#5a3d7a", "#ff4d88", "#ff2d78", "#ff7bb0", "#ffb84d", "#fff0f5"];
 let beats = 0, beatT = 1e9, phase = "formed", phaseT = 0, twistSpin = 0;
 let effect = { type: 0, t: 9 };   // hiệu ứng theo cấp nhấn (1..5)
+let bloomBump = 0, explodeT = -1, reformT = -1, letterFired = false;
 
 function beat() {
-  if (state !== "main" || beats >= BEATS) return;
+  if (state !== "main" || beats >= BEATS || explodeT >= 0 || reformT >= 0) return;
   beats++;
-  chime(520 + beats * 110, .3);
+  chime(520 + beats * 110, .3);        // âm thanh lên dần theo cấp
+  chime(95, .28, .22);                 // tiếng trầm thump
   beatT = 0;
+  bloomBump = .55;                     // ánh sáng bừng khi chạm
+  const f = $("#flash");               // chớp sáng nhanh
+  f.style.transition = "none"; f.style.opacity = .3;
+  requestAnimationFrame(() => { f.style.transition = "opacity .5s ease"; f.style.opacity = 0; });
+  const lf = $("#levelFill");
+  lf.style.height = (beats / BEATS * 100) + "%";
+  lf.style.setProperty("--lvl", lvlColors[beats]);
   if (beats === 1) ringT = 0;                 // nhịp 1: sóng xung kích
   effect = { type: beats, t: 0 };
   if (beats === 2) fireSparks();              // nhịp 2: tỏa hạt sáng
-  $("#beatFill").style.width = (beats / BEATS * 100) + "%";
-  $("#beatCount").textContent = beats + "/" + BEATS + " nhịp tim";
-  $("#hint").textContent = hints[beats];
-  $("#sub").textContent = subs[beats];
-  if (beats >= BEATS) setTimeout(flashToLetter, 900);
+  if (beats >= BEATS) startExplosion();       // nhịp 5: nổ tung
+}
+
+/* Nổ tung tim ở nhịp 5 → thiệp lắp ráp từ mảnh vỡ */
+function startExplosion() {
+  explodeT = 0;
+  $("#levelLine").classList.remove("show");
+  chime(170, .9, .3);                  // tiếng nổ trầm
+  chime(880, .5, .1);                  // loé sáng
+  bloomBump = 1.3;
+  for (let i = 0; i < 6; i++) setTimeout(fireShooter, i * 90);
 }
 function twist() {
   if (state !== "main" || phase !== "formed") return;
@@ -902,8 +914,6 @@ function twist() {
 }
 
 $("#introBtn").addEventListener("click", startFlight);
-$("#btnBeat").addEventListener("click", beat);
-$("#btnTwist").addEventListener("click", twist);
 
 // chạm nhẹ = mở quà / gọi tim / nhịp tim; chạm đôi = xoắn
 let downXY = null, lastTap = 0, tapTimer = 0;
@@ -965,8 +975,34 @@ function openLetter() {
   $("#letterBody").textContent = CONFIG.letter;
   $("#letterSign").textContent = `Thương, ${CONFIG.from} 🌹`;
   if (CONFIG.photos[0]) $("#polaroid").innerHTML = `<div class="photo"><img src="${CONFIG.photos[0]}" alt=""></div>`;
+  // gán bay ngẫu nhiên cho từng mảnh — lắp ráp khi hiện thiệp
+  document.querySelectorAll(".letter > *").forEach(el => {
+    el.style.setProperty("--dx", rand(-170, 170) + "px");
+    el.style.setProperty("--dy", rand(-130, 130) + "px");
+    el.style.setProperty("--dr", rand(-45, 45) + "deg");
+  });
+  spawnShards();
   $("#letterModal").classList.add("show");
   chime(660, .6);
+}
+/* mảnh tim bay từ xung quanh vào giữa — lắp ráp thành thiệp */
+function spawnShards() {
+  const box = $("#shards");
+  box.innerHTML = "";
+  for (let i = 0; i < 12; i++) {
+    const d = document.createElement("div");
+    d.className = "shard";
+    const a = rand(0, 6.28), dist = rand(150, 340);
+    d.style.marginLeft = rand(-12, 12) + "px";
+    d.style.marginTop = rand(-12, 12) + "px";
+    d.style.transform = `translate(${Math.cos(a) * dist}px,${Math.sin(a) * dist}px) rotate(${rand(0, 360)}deg)`;
+    d.style.transition = `transform .75s cubic-bezier(.3,1,.4,1) ${rand(0, .3)}s, opacity .5s ease ${rand(.3, .6)}s`;
+    box.appendChild(d);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      d.style.transform = "translate(0,0) rotate(0deg)";
+      d.style.opacity = 0;
+    }));
+  }
 }
 function flashToLetter() {
   const f = $("#flash");
@@ -983,10 +1019,14 @@ $("#closeLetter").addEventListener("click", () => {
   ringT = 1e9;
   sparks.visible = false;
   heartMat.color.setScalar(1);
-  $("#beatFill").style.width = "0%";
-  $("#beatCount").textContent = "0/" + BEATS + " nhịp tim";
-  $("#hint").textContent = hints[0];
-  $("#sub").textContent = "";
+  explodeT = -1;
+  reformT = 0;                       // hạt từ mảnh nổ tụ lại thành tim
+  letterFired = false;
+  bloomBump = 0;
+  const lf = $("#levelFill");
+  lf.style.height = "0%";
+  lf.style.setProperty("--lvl", lvlColors[0]);
+  $("#levelLine").classList.add("show");
   chime(440, .3);
 });
 
@@ -1103,36 +1143,55 @@ function animate() {
     }
   }
 
-  // node panel — nhịp tim liên tục, to dần theo cấp, hiệu ứng riêng từng nhịp
+  // node panel — nhịp tim liên tục, to dần, hiệu ứng riêng từng nhịp; nổ tung ở nhịp 5
   if (state === "main") {
     effect.t += dt;
     heart.rotation.y += dt * .06;
     if (beatT < 1) beatT += dt * 2;
+    if (bloomBump > 0) { bloomBump = Math.max(0, bloomBump - dt * 2); bloom.strength = .85 + bloomBump; }
     const cyc = t % 1.4;   // lub-dub: hai nhát tim
     const hb = Math.exp(-Math.pow((cyc - .12) / .07, 2)) + .6 * Math.exp(-Math.pow((cyc - .38) / .09, 2));
-    let s = (1 + .12 * beats) * (1 + .05 * hb);           // to dần sau mỗi nhịp + đập idle
-    if (beatT < 1) s *= 1 + .16 * Math.sin(Math.min(beatT, 1) * Math.PI);
-    let sx = 1, sy = 1;
-    if (effect.type === 2 && effect.t < 1.2) {            // nhịp 2: hạt tỏa ra
-      const p = sparkGeo.getAttribute("position").array;
-      for (let i = 0; i < SPARKS * 3; i++) { p[i] += sparkVel[i] * dt; p[i+1] += sparkVel[i+1] * dt; p[i+2] += sparkVel[i+2] * dt; }
-      sparkGeo.getAttribute("position").needsUpdate = true;
-      sparkMat.opacity = Math.max(0, 1 - effect.t / 1.2);
-    } else if (effect.type === 2) sparks.visible = false;
-    if (effect.type === 3) {                              // nhịp 3: xoay 360° + sáng bừng
-      if (effect.t < .9) heart.rotation.y += dt * 7 * (1 - effect.t / .9);
-      heartMat.color.setScalar(1 + 1.1 * Math.max(0, 1 - effect.t / .7));
-    } else heartMat.color.setScalar(1);
-    if (effect.type === 4 && effect.t < 1) {              // nhịp 4: nảy gel (co giãn)
-      const w = Math.exp(-3.5 * effect.t) * Math.cos(effect.t * 15);
-      sx = 1 + .2 * w; sy = 1 - .18 * w;
-    }
-    heartGroup.scale.set(s * sx, s * sy, s * sx);         // nhịp 5: chớp sáng → thư (flashToLetter)
-    updateTwist(dt);
-    if (ringT < 1.1) {                                    // nhịp 1: sóng xung kích
-      ringT += dt;
-      ring.scale.setScalar(1 + (ringT / 1.1) * 4.2);
-      ring.material.opacity = .7 * (1 - ringT / 1.1);
+    if (explodeT >= 0) {
+      // nổ tung: hạt bắn ra xa + phình to + loé sáng rồi mờ dần
+      explodeT += dt;
+      const p = 1 - easeOut(Math.min(1, explodeT / 1.0));
+      writeHeart(p, explodeT * 5);
+      heartGroup.scale.setScalar((1 + Math.min(explodeT, .3) * 1.9) * (1 + .05 * hb));
+      heartMat.opacity = Math.max(0, .95 - Math.max(0, explodeT - .55) / .75);
+      if (explodeT >= 1 && !letterFired) { letterFired = true; flashToLetter(); }
+    } else if (reformT >= 0) {
+      // đóng thư — hạt tụ về lại thành tim, cấp 0
+      reformT += dt;
+      const p = easeInOut(Math.min(1, reformT / 1.2));
+      writeHeart(p, (1 - p) * 4);
+      heartMat.opacity = Math.min(.95, p);
+      heartGroup.scale.setScalar(1 + .05 * hb);
+      if (reformT >= 1.2) reformT = -1;
+    } else {
+      let s = (1 + .12 * beats) * (1 + .05 * hb);           // to dần sau mỗi nhịp + đập idle
+      if (beatT < 1) s *= 1 + .16 * Math.sin(Math.min(beatT, 1) * Math.PI);
+      let sx = 1, sy = 1;
+      if (effect.type === 2 && effect.t < 1.2) {            // nhịp 2: hạt tỏa ra
+        const p = sparkGeo.getAttribute("position").array;
+        for (let i = 0; i < SPARKS * 3; i++) { p[i] += sparkVel[i] * dt; p[i+1] += sparkVel[i+1] * dt; p[i+2] += sparkVel[i+2] * dt; }
+        sparkGeo.getAttribute("position").needsUpdate = true;
+        sparkMat.opacity = Math.max(0, 1 - effect.t / 1.2);
+      } else if (effect.type === 2) sparks.visible = false;
+      if (effect.type === 3) {                              // nhịp 3: xoay 360° + sáng bừng
+        if (effect.t < .9) heart.rotation.y += dt * 7 * (1 - effect.t / .9);
+        heartMat.color.setScalar(1 + 1.1 * Math.max(0, 1 - effect.t / .7));
+      } else heartMat.color.setScalar(1);
+      if (effect.type === 4 && effect.t < 1) {              // nhịp 4: nảy gel (co giãn)
+        const w = Math.exp(-3.5 * effect.t) * Math.cos(effect.t * 15);
+        sx = 1 + .2 * w; sy = 1 - .18 * w;
+      }
+      heartGroup.scale.set(s * sx, s * sy, s * sx);
+      updateTwist(dt);
+      if (ringT < 1.1) {                                    // nhịp 1: sóng xung kích
+        ringT += dt;
+        ring.scale.setScalar(1 + (ringT / 1.1) * 4.2);
+        ring.material.opacity = .7 * (1 - ringT / 1.1);
+      }
     }
     bubbles.forEach(b => {
       const a = t * b.speed + b.ph;
